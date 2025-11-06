@@ -1,19 +1,24 @@
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart';
 
-class SignUpScreen extends StatefulWidget {
+class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
+
   @override
-  State<SignUpScreen> createState() => _SignUpScreenState();
+  State<SignupScreen> createState() => _SignUpScreenState();
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
+class _SignUpScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void dispose() {
@@ -23,25 +28,51 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // AuthWrapper will handle navigation
-    } on FirebaseAuthException catch (e) {
-      String message = 'An error occurred';
-      if (e.code == 'weak-password') message = 'The password provided is too weak.';
-      if (e.code == 'email-already-in-use') message = 'An account already exists for that email.';
+
+      if (userCredential.user != null) {
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'email': _emailController.text.trim(),
+          'role': 'user',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      // On success, AuthWrapper will handle navigation, so we do nothing here.
+    } catch (e) {
+      // Catch all errors and display a generic message
+      print("--- SIGN UP ERROR ---");
+      print(e);
+      String message = 'An error occurred. Please try again.';
+      // Specific Firebase Auth errors
+      if (e is FirebaseAuthException) {
+        if (e.code == 'weak-password') {
+          message = 'The password provided is too weak.';
+        } else if (e.code == 'email-already-in-use') {
+          message = 'An account already exists for that email.';
+        }
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -62,12 +93,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person_add_alt_1, size: 80, color: Colors.green),
+                    const Icon(Icons.person_add_alt_1_outlined, size: 80, color: Colors.green),
                     const SizedBox(height: 20),
-                    const Text('Create Account',
-                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const Text('Create an Account',
+                        style: TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black87)),
                     const SizedBox(height: 10),
-                    const Text('Sign up to start shopping', style: TextStyle(color: Colors.black54)),
+                    const Text('Sign up to get started', style: TextStyle(color: Colors.black54)),
                     const SizedBox(height: 30),
                     TextFormField(
                       controller: _emailController,
@@ -78,8 +110,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       keyboardType: TextInputType.emailAddress,
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your email';
-                        if (!value.contains('@')) return 'Please enter a valid email';
+                        if (value == null || value.isEmpty || !value.contains('@')) {
+                           return 'Please enter a valid email';
+                        }
                         return null;
                       },
                     ),
@@ -93,8 +126,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your password';
-                        if (value.length < 6) return 'Password must be at least 6 characters';
+                         if (value == null || value.isEmpty || value.length < 6) {
+                           return 'Password must be at least 6 characters long';
+                         }
                         return null;
                       },
                     ),
@@ -103,7 +137,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: _signUp,
+                        onPressed: _isLoading ? null : _signUp,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green.shade700,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -117,7 +151,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (context) => LoginScreen()),
+                          MaterialPageRoute(builder: (context) => const LoginScreen()),
                         );
                       },
                       child: const Text("Already have an account? Login", style: TextStyle(color: Colors.green)),

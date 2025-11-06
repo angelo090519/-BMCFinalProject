@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -33,10 +35,18 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text.trim(),
       );
       // AuthWrapper will handle navigation
-    } on FirebaseAuthException catch (e) {
-      String message = 'An error occurred';
-      if (e.code == 'user-not-found') message = 'No user found for that email.';
-      if (e.code == 'wrong-password') message = 'Wrong password provided.';
+    } catch (e) {
+      print("--- LOGIN ERROR ---");
+      print(e);
+      String message = 'An error occurred. Please try again.';
+      if (e is FirebaseAuthException) {
+        if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
+          message = 'Incorrect email or password.';
+        } else if (e.code == 'wrong-password') {
+          message = 'Incorrect email or password.';
+        }
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
@@ -118,7 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (context) => SignUpScreen()),
+                          MaterialPageRoute(builder: (context) => const SignupScreen()),
                         );
                       },
                       child: const Text("Don't have an account? Sign Up", style: TextStyle(color: Colors.green)),
